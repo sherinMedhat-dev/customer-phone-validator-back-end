@@ -1,5 +1,6 @@
 package eg.jumia.phonevalidator.service.impl;
 
+import eg.jumia.phonevalidator.mapper.PhoneDetailsMapper;
 import eg.jumia.phonevalidator.model.dto.PhoneDetailsDTO;
 import eg.jumia.phonevalidator.model.dto.PhoneFilterDTO;
 import eg.jumia.phonevalidator.model.entity.Customer;
@@ -26,6 +27,8 @@ public class CustomerServiceImpl implements CustomerService {
     private PhoneConfigurationService phoneConfigurationService;
     @Autowired
     private CustomerRepository customerRepository;
+    @Autowired
+    private PhoneDetailsMapper phoneDetailsMapper ;
 
     @Override
     public List<PhoneDetailsDTO> filterCustomerPhone(PhoneFilterDTO phoneFilterDTO) {
@@ -34,7 +37,7 @@ public class CustomerServiceImpl implements CustomerService {
                         .matchesCountryCodeOrIgnoreIfNull(phoneFilterDTO.getCountryCode()));
 
 
-        List<PhoneDetailsDTO> phoneDetails = mapToPhoneDetails(allCustomersMatchFilters,
+        List<PhoneDetailsDTO> phoneDetails = phoneDetailsMapper.mapToPhoneDetails(allCustomersMatchFilters,
                 phoneConfigurationService.getPhoneConfigurationsMap(phoneFilterDTO.getCountryCode()));
         //map to status by using pattern match
         //filter by status if status exists
@@ -47,50 +50,5 @@ public class CustomerServiceImpl implements CustomerService {
         }
         return phoneDetails.stream()
                 .filter(s -> s.getState() == phoneValidationState).collect(Collectors.toList());
-    }
-
-    private List<PhoneDetailsDTO> mapToPhoneDetails(List<Customer> customers, Map<String, String> countryCodePatternMatcher) {
-
-        return Optional.ofNullable(customers).
-                orElseGet(Collections::emptyList).stream()
-                .map(c -> extractPhoneDetail(c, countryCodePatternMatcher))
-                .collect(Collectors.toList());
-    }
-
-    private PhoneDetailsDTO extractPhoneDetail(Customer customer, Map<String, String> countryCodePatternMatcher) {
-        PhoneDetailsDTO phoneDetailsDTO = new PhoneDetailsDTO(customer);
-        phoneDetailsDTO.setCountryCode(extractCountryCode(customer.getPhone()));
-        phoneDetailsDTO.setState(extractStatusByPatternMatch(phoneDetailsDTO, countryCodePatternMatcher));
-        return phoneDetailsDTO;
-    }
-
-    private PhoneValidationState extractStatusByPatternMatch(PhoneDetailsDTO phoneDetailsDTO, Map<String, String> countryCodePatternMatcher) {
-
-            String regex = StringUtils.hasText(phoneDetailsDTO.getCountryCode())?
-        countryCodePatternMatcher.get(phoneDetailsDTO.getCountryCode()):null;
-            return isPhoneNumberValidForCountry(regex, phoneDetailsDTO.getPhoneNumber());
-    }
-
-    public PhoneValidationState isPhoneNumberValidForCountry(String regex, String phoneNumber) {
-        try {
-            if (!Optional.ofNullable(regex).isEmpty() && !Optional.ofNullable(phoneNumber).isEmpty()) {
-                boolean isValid = phoneNumber.matches(regex);
-                return (isValid) ? PhoneValidationState.Valid : PhoneValidationState.InValid;
-            }
-        } catch (PatternSyntaxException ex) {
-            ex.printStackTrace();
-        }
-        return PhoneValidationState.Undetermined;
-    }
-
-    private String extractCountryCode(String phoneNumber) {
-        try {
-            return StringUtils.hasText(phoneNumber) ?
-                    phoneNumber.substring(phoneNumber.indexOf("(") + 1,
-                            phoneNumber.indexOf(")")) : "";
-        } catch (IndexOutOfBoundsException ex) {
-            ex.printStackTrace();
-            return "";
-        }
     }
 }
